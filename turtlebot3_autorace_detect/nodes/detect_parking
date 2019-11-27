@@ -31,6 +31,7 @@ from sensor_msgs.msg import LaserScan, Image, CompressedImage
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from cv_bridge import CvBridge, CvBridgeError
+from turtlebot3_msgs.msg import movingParam
 
 class DetectParking():
     def __init__(self):
@@ -39,10 +40,10 @@ class DetectParking():
 
         # subscribes state : white line reliability
         self.sub_parking_lot_order = rospy.Subscriber('/detect/parking_lot_order', UInt8, self.cbParkingLotOrder, queue_size=1)
-
         self.sub_scan_obstacle = rospy.Subscriber('/detect/scan', LaserScan, self.cbScanObstacle, queue_size=1)
-
         self.sub_parking_finished = rospy.Subscriber('/control/parking_finished', UInt8, self.cbParkingFinished, queue_size = 1)
+        self.sub_moving_completed = rospy.Subscriber('/control/moving/complete', UInt8, self.cbMovingComplete, queue_size = 1)
+        self.pub_moving = rospy.Publisher('/control/moving/state', movingParam, queue_size= 1)
 
         if self.sub_image_type == "compressed":
             # subscribes compressed image
@@ -66,7 +67,10 @@ class DetectParking():
 
         self.StepOfParkingLot = Enum('StepOfParkingLot', 'searching_parking_sign searching_parking_point_line searching_nonreserved_parking_area parking')
 
-        self.is_obstacle_detected = True
+        self.start_obstacle_detection = False
+
+        self.is_obstacle_detected_R = False
+        self.is_obstacle_detected_L = False
 
         self.cvBridge = CvBridge()
         self.cv_image = None
@@ -74,6 +78,7 @@ class DetectParking():
         self.is_parking_allowed = False
         self.is_now_parking = False
         self.is_parking_finished = False
+        self.is_moving_complete = False
 
         self.blink_trigger = 1
         self.blink_count = 0
@@ -84,6 +89,9 @@ class DetectParking():
 
         self.img1 = cv2.imread(dir_path + 'parking_not_allowed.png', -1)
         self.img2 = cv2.imread(dir_path + 'parking_allowed.png', -1)
+
+    def cbMovingComplete(self, data):
+        self.is_moving_complete = True
 
     def cbGetImage(self, image_msg):
         if image_msg is not None:
@@ -114,19 +122,224 @@ class DetectParking():
             msg_pub_parking_lot_return.data = self.StepOfParkingLot.searching_parking_sign.value
                                       
         elif order.data == self.StepOfParkingLot.searching_parking_point_line.value:
-            rospy.loginfo("Now searching_parking_point_line")
-
+            rospy.loginfo("Now motion")
             msg_pub_max_vel = Float64()
-            msg_pub_max_vel.data = 0.06
+            msg_pub_max_vel.data = 0.00
             self.pub_max_vel.publish(msg_pub_max_vel)
 
-            while True:
-                if self.fnFindDotLine():
-                    break
-                else:
-                    pass
+            rospy.sleep(1)
 
-            msg_pub_parking_lot_return.data = self.StepOfParkingLot.searching_parking_point_line.value
+            rospy.loginfo("doing motion_str")
+            msg_moving = movingParam()
+            msg_moving.moving_type= 4
+            msg_moving.moving_value_angular=0.0
+            msg_moving.moving_value_linear=0.4
+            self.pub_moving.publish(msg_moving)
+            while True:
+                if self.is_moving_complete == True:
+                    break
+            self.is_moving_complete = False
+
+            rospy.sleep(1)
+
+            rospy.loginfo("doing motion_lf")
+            msg_moving = movingParam()
+            msg_moving.moving_type=2
+            msg_moving.moving_value_angular=83
+            msg_moving.moving_value_linear=0.0
+            self.pub_moving.publish(msg_moving)
+            while True:
+                if self.is_moving_complete == True:
+                    break
+            self.is_moving_complete = False
+
+            rospy.sleep(1)
+
+            rospy.loginfo("doing motion_str2")
+            msg_moving.moving_type= 4
+            msg_moving.moving_value_angular=0.0
+            msg_moving.moving_value_linear=1.0
+            self.pub_moving.publish(msg_moving)
+            while True:
+                if self.is_moving_complete == True:
+                    break
+            self.is_moving_complete = False
+
+            rospy.sleep(5)
+
+
+            self.start_obstacle_detection = True
+
+            while True:
+                if self.is_obstacle_detected_L == True or self.is_obstacle_detected_R == True:
+                    break
+            
+            if self.is_obstacle_detected_R == False:
+                rospy.loginfo("right parking lot is clear")
+                msg_moving = movingParam()
+                msg_moving.moving_type=3
+                msg_moving.moving_value_angular=90
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(1)
+
+                rospy.loginfo("doing motion_str")
+                msg_moving.moving_type= 4
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.35
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(4)
+                
+                rospy.loginfo("doing motion_str")
+                msg_moving.moving_type= 5
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.35
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(3)
+
+                rospy.loginfo("doing motion_ri")
+                msg_moving.moving_type= 3
+                msg_moving.moving_value_angular=90
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(2)
+
+                rospy.loginfo("doing motion_str")
+            
+                msg_moving.moving_type= 4
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.95
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+                self.is_moving_complete = False
+
+                rospy.sleep(2)
+
+                rospy.loginfo("left parking lot is clear")
+                msg_moving.moving_type=2
+                msg_moving.moving_value_angular=95
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(1)   
+
+                msg_moving = movingParam()
+                msg_moving.moving_type=2
+                msg_moving.moving_value_angular=90
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                
+
+                rospy.sleep(1)       
+            
+            elif self.is_obstacle_detected_L == False:
+                rospy.loginfo("left parking lot is clear")
+                msg_moving = movingParam()
+                msg_moving.moving_type=2
+                msg_moving.moving_value_angular=85
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(1)
+
+                msg_moving.moving_type= 4
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.30
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(2)
+                
+                msg_moving.moving_type= 5
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.30
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(3)
+
+                msg_moving.moving_type= 2
+                msg_moving.moving_value_angular=82
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(2)
+            
+
+                rospy.loginfo("doing motion_str")
+            
+                msg_moving.moving_type= 4
+                msg_moving.moving_value_angular=0.0
+                msg_moving.moving_value_linear=0.95
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+                self.is_moving_complete = False
+
+                rospy.sleep(2)
+
+                rospy.loginfo("left parking lot is clear")
+                msg_moving.moving_type=2
+                msg_moving.moving_value_angular=90
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                rospy.sleep(1)
+
+                msg_moving = movingParam()
+                msg_moving.moving_type=2
+                msg_moving.moving_value_angular=90
+                msg_moving.moving_value_linear=0.0
+                self.pub_moving.publish(msg_moving)
+                while True:
+                    if self.is_moving_complete == True:
+                        break
+
+                
+
+                rospy.sleep(1)        
+
+            rospy.loginfo("eeeeeeeeeeeeeeennnnnnnnnnnnnnnnddddddddddd")
+            msg_pub_parking_lot_return.data = self.StepOfParkingLot.parking.value
 
         elif order.data == self.StepOfParkingLot.searching_nonreserved_parking_area.value:
             rospy.loginfo("Now searching_nonreserved_parking_area")
@@ -175,18 +388,32 @@ class DetectParking():
     def cbParkingFinished(self, parking_finished_msg):
         self.is_parking_finished = True
 
+
     def cbScanObstacle(self, scan):
-        angle_scan = 60
-        scan_start = 270 - angle_scan
-        scan_end = 270 + angle_scan
+        angle_scan = 30
+
+        scan_start_left = 90 - angle_scan
+        scan_end_left = 90 + angle_scan
+
+        scan_start_right = 270 - angle_scan
+        scan_end_right = 270 + angle_scan
+
         threshold_distance = 0.5
-        is_obstacle_detected = False
 
-        for i in range(scan_start, scan_end):
-            if scan.ranges[i] < threshold_distance and scan.ranges[i] > 0.01:
-                is_obstacle_detected = True
+        if self.start_obstacle_detection == True:
+            for i in range(scan_start_left, scan_end_left):
+                if scan.ranges[i] < threshold_distance and scan.ranges[i] > 0.01:
+                    self.is_obstacle_detected_L = True
+                    rospy.loginfo("left detected")
+            
 
-        self.is_obstacle_detected = is_obstacle_detected
+            for i in range(scan_start_right, scan_end_right):
+                if scan.ranges[i] < threshold_distance and scan.ranges[i] > 0.01:
+                    self.is_obstacle_detected_R = True
+                    rospy.loginfo("right detected")
+            self.start_obstacle_detection = False
+
+        
 
     def fnFindDotLine(self):
         self.cv_bitn_img = cv2.bitwise_not(self.cv_image)

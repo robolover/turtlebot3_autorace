@@ -72,7 +72,7 @@ class DetectTunnel():
             self.start_pos_y = self.current_pos_y
 
             while True:
-                error = self.fnStraight(0.55)
+                error = self.fnStraight(0.25)
 
                 if math.fabs(error) < 0.005:
                     break
@@ -91,7 +91,7 @@ class DetectTunnel():
             initialPose.header.stamp = rospy.Time.now()
             initialPose.pose.pose = self.odom_msg.pose.pose
 
-            self.pub_init_pose.publish(initialPose)
+            # self.pub_init_pose.publish(initialPose)
 
             self.fnPubGoalPose()
 
@@ -102,6 +102,7 @@ class DetectTunnel():
                     pass
 
             pub_tunnel_return.data = self.StepOfTunnel.navigation.value
+            rospy.loginfo("navigation!")
 
 
         elif order.data == self.StepOfTunnel.go_out_from_tunnel.value:
@@ -112,7 +113,7 @@ class DetectTunnel():
             self.start_pos_y = self.current_pos_y
 
             while True:
-                error = self.fnStraight(0.25)
+                error = self.fnStraight(0.30)
 
                 if math.fabs(error) < 0.005:
                     break

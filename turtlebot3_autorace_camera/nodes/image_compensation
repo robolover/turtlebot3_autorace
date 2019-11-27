@@ -35,8 +35,10 @@ class ImageCompensation():
         if self.is_calibration_mode == True:
             srv_image_compensation = Server(ImageCompensationParamsConfig, self.cbGetImageCompensationParam)
 
+
         self.sub_image_type = "compressed"  # "compressed" / "raw"
         self.pub_image_type = "raw"         # "compressed" / "raw"
+
 
         if self.sub_image_type == "compressed":
             # subscribes compressed image 

@@ -32,24 +32,24 @@ from turtlebot3_autorace_detect.cfg import DetectTrafficLightParamsConfig
 class DetectTrafficLight():
     def __init__(self):
         self.hue_red_l = rospy.get_param("~detect/lane/red/hue_l", 0)
-        self.hue_red_h = rospy.get_param("~detect/lane/red/hue_h", 25)
-        self.saturation_red_l = rospy.get_param("~detect/lane/red/saturation_l", 31)
+        self.hue_red_h = rospy.get_param("~detect/lane/red/hue_h", 10)
+        self.saturation_red_l = rospy.get_param("~detect/lane/red/saturation_l", 30)
         self.saturation_red_h = rospy.get_param("~detect/lane/red/saturation_h", 255)
-        self.lightness_red_l = rospy.get_param("~detect/lane/red/lightness_l", 51)
+        self.lightness_red_l = rospy.get_param("~detect/lane/red/lightness_l", 48)
         self.lightness_red_h = rospy.get_param("~detect/lane/red/lightness_h", 255)
 
-        self.hue_yellow_l = rospy.get_param("~detect/lane/yellow/hue_l", 11)
-        self.hue_yellow_h = rospy.get_param("~detect/lane/yellow/hue_h", 27)
-        self.saturation_yellow_l = rospy.get_param("~detect/lane/yellow/saturation_l", 81)
-        self.saturation_yellow_h = rospy.get_param("~detect/lane/yellow/saturation_h", 196)
-        self.lightness_yellow_l = rospy.get_param("~detect/lane/yellow/lightness_l", 22)
-        self.lightness_yellow_h = rospy.get_param("~detect/lane/yellow/lightness_h", 86)
+        self.hue_yellow_l = rospy.get_param("~detect/lane/yellow/hue_l", 20)
+        self.hue_yellow_h = rospy.get_param("~detect/lane/yellow/hue_h", 35)
+        self.saturation_yellow_l = rospy.get_param("~detect/lane/yellow/saturation_l", 100)
+        self.saturation_yellow_h = rospy.get_param("~detect/lane/yellow/saturation_h", 255)
+        self.lightness_yellow_l = rospy.get_param("~detect/lane/yellow/lightness_l", 50)
+        self.lightness_yellow_h = rospy.get_param("~detect/lane/yellow/lightness_h", 255)
 
-        self.hue_green_l = rospy.get_param("~detect/lane/green/hue_l", 52)
-        self.hue_green_h = rospy.get_param("~detect/lane/green/hue_h", 114)
-        self.saturation_green_l = rospy.get_param("~detect/lane/green/saturation_l", 108)
+        self.hue_green_l = rospy.get_param("~detect/lane/green/hue_l", 46)
+        self.hue_green_h = rospy.get_param("~detect/lane/green/hue_h", 76)
+        self.saturation_green_l = rospy.get_param("~detect/lane/green/saturation_l", 86)
         self.saturation_green_h = rospy.get_param("~detect/lane/green/saturation_h", 255)
-        self.lightness_green_l = rospy.get_param("~detect/lane/green/lightness_l", 112)
+        self.lightness_green_l = rospy.get_param("~detect/lane/green/lightness_l", 50)
         self.lightness_green_h = rospy.get_param("~detect/lane/green/lightness_h", 255)
 
         self.is_calibration_mode = rospy.get_param("~is_detection_calibration_mode", False)
@@ -87,11 +87,17 @@ class DetectTrafficLight():
                 self.pub_image_yellow_light = rospy.Publisher('/detect/image_output_sub2', Image, queue_size = 1)
                 self.pub_image_green_light = rospy.Publisher('/detect/image_output_sub3', Image, queue_size = 1)
 
+
         self.sub_traffic_light_finished = rospy.Subscriber('/control/traffic_light_finished', UInt8, self.cbTrafficLightFinished, queue_size = 1)
         self.pub_traffic_light_return = rospy.Publisher('/detect/traffic_light_stamped', UInt8, queue_size=1)
         self.pub_parking_start = rospy.Publisher('/control/traffic_light_start', UInt8, queue_size = 1)
         self.pub_max_vel = rospy.Publisher('/control/max_vel', Float64, queue_size = 1)
 
+
+        self.pub_traffic_line = rospy.Publisher('/detect/traffic_line', UInt8, queue_size=1)
+
+
+        self.CurrentMode = Enum('CurrentMode', 'idle lane_following traffic_light parking_lot level_crossing tunnel')
         self.StepOfTrafficLight = Enum('StepOfTrafficLight', 'searching_traffic_light searching_green_light searching_yellow_light searching_red_light waiting_green_light pass_traffic_light')
 
         self.cvBridge = CvBridge()
@@ -99,6 +105,8 @@ class DetectTrafficLight():
 
         self.is_image_available = False
         self.is_traffic_light_finished = False
+
+
 
         self.green_count = 0
         self.yellow_count = 0
@@ -110,7 +118,8 @@ class DetectTrafficLight():
         loop_rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             if self.is_image_available == True:
-                self.fnFindTrafficLight()
+                if self.is_traffic_light_finished == False:
+                    self.fnFindTrafficLight()
 
             loop_rate.sleep()
 
@@ -183,9 +192,11 @@ class DetectTrafficLight():
 
         status1 = self.fnFindCircleOfTrafficLight(cv_image_mask, 'green')
         if status1 == 1 or status1 == 5:
+            rospy.loginfo("FUCK")
             self.stop_count = 0
             self.green_count += 1
         else:
+            # rospy.loginfo("TAHT")
             self.green_count = 0
         
             cv_image_mask = self.fnMaskYellowTrafficLight()
@@ -202,7 +213,7 @@ class DetectTrafficLight():
 
                 status3 = self.fnFindCircleOfTrafficLight(cv_image_mask, 'red')
                 if status3 == 3:
-                    self.red_count += 3
+                    self.red_count += 1
                 elif status3 == 4:
                     self.red_count = 0
                     self.stop_count += 1
@@ -210,12 +221,18 @@ class DetectTrafficLight():
                     self.red_count = 0
                     self.stop_count = 0
 
-        if self.green_count > 20:
+        if self.green_count > 5:
             msg_pub_max_vel = Float64()
             msg_pub_max_vel.data = 0.12
             self.pub_max_vel.publish(msg_pub_max_vel)
             rospy.loginfo("GREEN")
             cv2.putText(self.cv_image,"GREEN", (self.point_col, self.point_low), cv2.FONT_HERSHEY_DUPLEX, 0.5, (80, 255, 0))
+            msg_sign = UInt8()
+            msg_sign.data = self.CurrentMode.lane_following.value
+
+            self.pub_traffic_line.publish(msg_sign)
+            self.is_traffic_light_finished = True
+            
 
         if self.yellow_count > 12:
             msg_pub_max_vel = Float64()
@@ -224,7 +241,7 @@ class DetectTrafficLight():
             rospy.loginfo("YELLOW")
             cv2.putText(self.cv_image,"YELLOW", (self.point_col, self.point_low), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255))
 
-        if self.red_count > 6:
+        if self.red_count > 8:
             msg_pub_max_vel = Float64()
             msg_pub_max_vel.data = 0.03
             self.pub_max_vel.publish(msg_pub_max_vel)
@@ -366,15 +383,15 @@ class DetectTrafficLight():
         # Filter by Area.
         params.filterByArea = True
         params.minArea = 50
-        params.maxArea = 500
+        params.maxArea = 600
 
         # Filter by Circularity
         params.filterByCircularity = True
-        params.minCircularity = 0.5
+        params.minCircularity = 0.6
 
         # Filter by Convexity
         params.filterByConvexity = True
-        params.minConvexity = 0.4
+        params.minConvexity = 0.6
 
         det=cv2.SimpleBlobDetector_create(params)
         keypts=det.detect(mask)
