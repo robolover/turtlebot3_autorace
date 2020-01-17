@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+ 
+import rospy
+import numpy as np
+import math
+import tf
+from enum import Enum
+from std_msgs.msg import UInt8, Float64
+from turtlebot3_msgs.msg import movingParam
+
+
+#resolution this timer is 10ms
+
+class DetectTimer():
+    def __init__(self):
+        self.pub_timer_complete = rospy.Publisher('/detect/timer/complete', UInt8, queue_size= 1)
+        self.sub_timer_start = rospy.Subscriber('/detect/timer/start', Float64, self.cbTimer, queue_size=1)
+
+        self.pub_max_vel = rospy.Publisher('/control/max_vel', Float64, queue_size=1)
+        
+        self.TypeOfTimerState = Enum('TypeOfTimerState', 'idle ready start stop')
+        self.timerState = self.TypeOfTimerState.ready.value
+
+        self.timerCount = Float64()
+        self.targetCount = Float64()
+
+        self.initParam()
+
+        loop_rate = rospy.Rate(100)
+        while not rospy.is_shutdown():
+            if self.timerState == self.TypeOfTimerState.start.value:
+                self.fnRunTimer()
+            else:
+                pass
+            loop_rate.sleep()
+        rospy.on_shutdown(self.fnShutDown)
+
+    def initParam(self):
+        self.timerState = self.TypeOfTimerState.ready.value
+        self.timerCount = 0
+        self.targetCount = 0
+
+    def fnFinshTimer(self):
+        rospy.loginfo("finished timer")
+        self.initParam()
+        complete_msg = UInt8()
+        complete_msg = 1
+        self.pub_timer_complete.publish(complete_msg)
+        send_max_vel = Float64()
+        send_max_vel = 0.11
+        self.pub_max_vel.publish(send_max_vel)
+
+    def fnRunTimer(self):
+        if self.timerState == self.TypeOfTimerState.start.value:
+            self.timerCount = self.timerCount + 1
+            if self.timerCount >= self.targetCount:
+                self.timerState = self.TypeOfTimerState.stop.value
+                self.fnFinshTimer()
+        else:
+            pass
+
+    def cbTimer(self, msg):
+        if self.timerState == self.TypeOfTimerState.ready.value:
+            self.targetCount = msg.data * 100
+            rospy.loginfo("targetTime (1s)) = %f", msg.data)
+            rospy.loginfo("targetCount (10ms) = %f", self.targetCount)
+            self.timerState = self.TypeOfTimerState.start.value
+        else:
+            rospy.loginfo("timer is running now")
+
+    def fnShutDown(self):
+        rospy.loginfo("timer Shutdown")
+
+    def main(self):
+        rospy.spin()
+
+if __name__ == '__main__':
+    rospy.init_node('detect_timer')
+    node = DetectTimer()
+    node.main()
